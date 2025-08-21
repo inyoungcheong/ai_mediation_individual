@@ -1,71 +1,123 @@
-import { kv } from '$lib/kv';
-import { nanoid } from '$lib/utils';
-import type { Config } from '@sveltejs/adapter-vercel';
-import { OpenAIStream, StreamingTextResponse } from 'ai';
-import { Configuration, OpenAIApi } from 'openai-edge';
-
-import { env } from '$env/dynamic/private';
-// You may want to replace the above with a static private env variable
-// for dead-code elimination and build-time type-checking:
-// import { OPENAI_API_KEY } from '$env/static/private'
-
 import type { RequestHandler } from './$types';
+import { env } from '$env/dynamic/private';
 
-export const config: Config = {
-	runtime: 'edge'
+// CORS 헤더 설정
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
 };
 
-export const POST = (async ({ request, locals: { getSession } }) => {
-	const json = await request.json();
-	const { messages, previewToken } = json;
-	const session = await getSession();
+// OPTIONS 요청 처리 (CORS preflight)
+export const OPTIONS: RequestHandler = async () => {
+  return new Response(null, {
+    status: 200,
+    headers: corsHeaders
+  });
+};
 
-	// Create an OpenAI API client
-	const config = new Configuration({
-		apiKey: previewToken || env.OPENAI_API_KEY
-	});
-	const openai = new OpenAIApi(config);
+export const POST: RequestHandler = async ({ request }) => {
+  try {
+    // Princeton Azure OpenAI 설정
+    const apiKey = env.OPENAI_API_KEY;
+    const endpoint = 'https://api-ai-sandbox.princeton.edu/';
+    const apiVersion = '2025-03-01-preview';
+    const modelName = 'gpt-4o-mini';
+    
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found');
+    }
+    
+    // 요청 본문에서 데이터 추출
+    const { messages } = await request.json();
+    
+    console.log('Received chat request:', { messageCount: messages?.length });
+    
+    if (!messages || !Array.isArray(messages)) {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid messages format'
+      }), {
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    }
 
-	// Ask OpenAI for a streaming chat completion given the prompt
-	const response = await openai.createChatCompletion({
-		model: 'gpt-3.5-turbo',
-		messages,
-		temperature: 0.7,
-		stream: true
-	});
+    // 기본 챗봇 시스템 프롬프트
+    const systemPrompt = "You are a helpful AI assistant. Respond naturally and helpfully to user questions.";
+    
+    // 대화 컨텍스트 구성
+    const conversationMessages = [
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      ...messages
+    ];
 
-	// Convert the response into a friendly text-stream
-	const stream = OpenAIStream(response, {
-		async onCompletion(completion) {
-			const title = messages[0].content.substring(0, 100);
-			const userId = session?.user?.id;
-			if (userId) {
-				const id = json.id ?? nanoid();
-				const createdAt = Date.now();
-				const path = `/chat/${id}`;
-				const payload = {
-					id,
-					title,
-					userId,
-					createdAt,
-					path,
-					messages: [
-						...messages,
-						{
-							content: completion,
-							role: 'assistant'
-						}
-					]
-				};
-				await kv.hmset(`chat:${id}`, payload);
-				await kv.zadd(`user:chat:${userId}`, {
-					score: createdAt,
-					member: `chat:${id}`
-				});
-			}
-		}
-	});
+    const requestData = {
+      messages: conversationMessages,
+      model: modelName,
+      max_tokens: 300,
+      temperature: 0.7
+    };
 
-	// Respond with the stream
-	return new StreamingTextResponse(stream);
-}) satisfies RequestHandler;
+    console.log('Making Princeton Azure OpenAI API call');
+    
+    // Princeton Azure OpenAI API 호출
+    const apiUrl = `${endpoint}openai/deployments/${modelName}/chat/completions?api-version=${apiVersion}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    console.log('API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Princeton Azure OpenAI API error:', response.status, errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const aiMessage = data.choices[0]?.message?.content?.trim() || "I'm here to help! How can I assist you?";
+    
+    console.log('Generated AI response length:', aiMessage.length);
+    
+    return new Response(JSON.stringify({ 
+      message: aiMessage
+    }), {
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Chat error:', error);
+    
+    return new Response(JSON.stringify({ 
+      message: "I'm sorry, I'm having trouble processing your request right now. Please try again.",
+      error: error.message
+    }), {
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
+};
+
+// GET 테스트용
+export const GET: RequestHandler = async () => {
+  return new Response('Chat API is working!', {
+    headers: corsHeaders
+  });
+};
