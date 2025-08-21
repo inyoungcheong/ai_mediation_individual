@@ -88,15 +88,6 @@ Automatically deployed via Vercel GitHub integration. Any push to the main branc
 - `/api/gender_roles` - Handles conversational AI interactions
 - `/embed` - Embeddable chatbot interface for Qualtrics
 
-## Acknowledgments
-
-This project is built upon the excellent SvelteKit AI Chatbot template by:
-- **Jian Yuan Lee** ([@jyuan](https://twitter.com/jyuan)) - Original SvelteKit AI Chatbot
-- **Vercel Labs** - [Next.js AI Chatbot](https://github.com/vercel-labs/ai-chatbot) foundation
-- **hauselin** - [SvelteKit adaptation](https://github.com/hauselin/sveltekit-ai-chatbot)
-
-We extend our gratitude to the open-source community for providing the foundational tools that made this research platform possible.
-
 ## License
 
 Academic Research Use Only
@@ -110,4 +101,7 @@ This project is built upon the excellent SvelteKit AI Chatbot template by:
 
 with contributions from:
 
-- Inyoung Cheong ([@inyoungcheong](https://inyoungcheong.github.io=))
+- **Inyoung Cheong** ([@inyoungcheong](https://inyoungcheong.github.io=))
+
+We extend our gratitude to the open-source community for providing the foundational tools that made this research platform possible.
+
