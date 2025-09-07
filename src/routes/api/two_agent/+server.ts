@@ -108,7 +108,7 @@ async function generateInitialMessage(sessionData: any, apiKey: string, endpoint
         { role: 'user', content: 'Please generate the initial message to start the conversation.' }
       ],
       model: modelName,
-      max_tokens: 400,
+      max_tokens: 800,
       temperature: 0.8
     };
 
@@ -212,7 +212,7 @@ async function generateEmotionalAgentResponse(messages: any[], sessionData: any,
     const requestData = {
       messages: conversationMessages,
       model: modelName,
-      max_tokens: 300,
+      max_tokens: 800,
       temperature: 0.9 // 더 창의적이고 감정적인 응답을 위해 높은 temperature
     };
 
@@ -327,7 +327,7 @@ async function generateIntelligentAgentResponse(messages: any[], sessionData: an
     const requestData = {
       messages: conversationMessages,
       model: modelName,
-      max_tokens: 300,
+      max_tokens: 800,
       temperature: 0.7 // 더 논리적이고 분석적인 응답을 위해 중간 temperature
     };
 
