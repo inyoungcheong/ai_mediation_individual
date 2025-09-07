@@ -86,19 +86,30 @@
 
   // 챗봇에 초기 메시지 추가
   function addInitialMessageToChat(response) {
-    // 기존 초기화 메시지를 교체 (원본 메시지 저장)
-    messages = [
-      {
-        id: Date.now(),
-        content: response.message, // 원본 메시지 저장 (태그 포함)
-        sender: 'assistant',
-        timestamp: new Date().toISOString(),
-        agentType: 'initial'
-      }
-    ];
+    // aiSummary를 user 메시지로 히스토리에 추가 (UI에서는 보이지 않음)
+    const aiSummaryMessage = {
+      id: Date.now() - 1,
+      content: sessionData.aiSummary || '',
+      sender: 'user',
+      timestamp: new Date().toISOString(),
+      agentType: 'hidden', // UI에서 숨김 처리
+      hidden: true // 숨김 플래그
+    };
+    
+    // 초기 메시지를 assistant로 추가
+    const initialMessage = {
+      id: Date.now(),
+      content: response.message, // 원본 메시지 저장 (태그 포함)
+      sender: 'assistant',
+      timestamp: new Date().toISOString(),
+      agentType: 'initial'
+    };
+    
+    // 히스토리 구성: aiSummary (hidden) -> initial message
+    messages = [aiSummaryMessage, initialMessage];
     
     conversationState = response.conversationState || 'user_message';
-    console.log('Initial message added to chat:', response.message.substring(0, 100) + '...');
+    console.log('Initial message added to chat with aiSummary in history:', response.message.substring(0, 100) + '...');
   }
 
   // AI 메시지 포맷팅 함수 (표시용)
@@ -312,19 +323,21 @@
   
   <div class="chat-messages" bind:this={chatContainer}>
     {#each messages as message (message.id)}
-      <div class="message {message.sender} {getAgentClass(message.agentType)}">
-        {#if message.agentType !== 'user' && message.agentType !== 'loading'}
-          <div class="agent-label">
-            {getAgentLabel(message.agentType)}
+      {#if !message.hidden}
+        <div class="message {message.sender} {getAgentClass(message.agentType)}">
+          {#if message.agentType !== 'user' && message.agentType !== 'loading'}
+            <div class="agent-label">
+              {getAgentLabel(message.agentType)}
+            </div>
+          {/if}
+          <div class="message-content">
+            {@html formatAIMessageForDisplay(message.content)}
           </div>
-        {/if}
-        <div class="message-content">
-          {@html formatAIMessageForDisplay(message.content)}
+          <div class="message-time">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </div>
         </div>
-        <div class="message-time">
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </div>
-      </div>
+      {/if}
     {/each}
     
     {#if isLoading}

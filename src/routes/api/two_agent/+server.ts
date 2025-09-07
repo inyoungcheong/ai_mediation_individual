@@ -176,7 +176,7 @@ async function generateEmotionalAgentResponse(messages: any[], sessionData: any,
     
     // 대화 기록을 임시로 복사하여 태그 제거 (원본은 보존)
     const tempMessages = messages
-      .filter((msg: any) => msg.content !== 'loading' && msg.sender)
+      .filter((msg: any) => msg.content !== 'loading' && msg.sender && !msg.hidden)
       .map((msg: any) => {
         if (msg.sender === 'user') {
           return {
@@ -291,7 +291,7 @@ async function generateIntelligentAgentResponse(messages: any[], sessionData: an
     
     // 대화 기록을 임시로 복사하여 태그 제거 (원본은 보존)
     const tempMessages = messages
-      .filter((msg: any) => msg.content !== 'loading' && msg.sender)
+      .filter((msg: any) => msg.content !== 'loading' && msg.sender && !msg.hidden)
       .map((msg: any) => {
         if (msg.sender === 'user') {
           return {
@@ -461,9 +461,12 @@ APPROACH:
 - Use emotional language and expressions
 - Be supportive and encouraging
 - When user_2 appears, acknowledge their perspective too
+- Use emojis and non-verbal expressions frequently (😢, 😭, 💔, 🤗, ❤️, 😊, 😔, etc.)
+- Include Korean-style emotional expressions (ㅠㅠㅠ, ㅜㅜㅜ, ㅎㅎㅎ, ㅋㅋㅋ, etc.)
+- Use expressive punctuation (!!!, ???, ...)
 - Keep responses around 200-300 words
 
-Remember: You are part of an active discussion with user_1 and user_2. Focus purely on the emotional and empathetic aspects while engaging with all participants.`;
+Remember: You are part of an active discussion with user_1 and user_2. Focus purely on the emotional and empathetic aspects while engaging with all participants. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
 }
 
 // 지적 에이전트용 프롬프트
@@ -501,7 +504,7 @@ APPROACH:
 - When user_2 appears, analyze their perspective too
 - Keep responses around 200-300 words
 
-Remember: You are part of an active discussion with user_1 and user_2. Your role is to add intellectual depth and analytical thinking while engaging with all participants.`;
+Remember: You are part of an active discussion with user_1 and user_2. Your role is to add intellectual depth and analytical thinking while engaging with all participants. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
 }
 
 // 간단한 GET 테스트용
