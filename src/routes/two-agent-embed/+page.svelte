@@ -86,13 +86,11 @@
 
   // 챗봇에 초기 메시지 추가
   function addInitialMessageToChat(response) {
-    const formattedMessage = formatAIMessage(response.message);
-    
-    // 기존 초기화 메시지를 교체
+    // 기존 초기화 메시지를 교체 (원본 메시지 저장)
     messages = [
       {
         id: Date.now(),
-        content: formattedMessage,
+        content: response.message, // 원본 메시지 저장 (태그 포함)
         sender: 'assistant',
         timestamp: new Date().toISOString(),
         agentType: 'initial'
@@ -103,9 +101,26 @@
     console.log('Initial message added to chat:', response.message.substring(0, 100) + '...');
   }
 
-  // AI 메시지 포맷팅 함수
+  // AI 메시지 포맷팅 함수 (표시용)
   function formatAIMessage(message) {
     return message
+      // ** bold ** 처리
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // * italic * 처리  
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // 불렛 포인트 처리 (- 로 시작하는 줄들)
+      .replace(/^- (.+)$/gm, '• $1')
+      // 연구 결과나 데이터 관련 줄들을 불렛 포인트로
+      .replace(/^(Research|Studies|Data|Evidence|A study)(.+)$/gm, '• $1$2')
+      // 줄바꿈 처리
+      .replace(/\n/g, '<br>');
+  }
+
+  // AI 메시지 표시용 포맷팅 함수 (태그 제거)
+  function formatAIMessageForDisplay(message) {
+    return message
+      // @emotional: 및 @intelligent: 태그 제거
+      .replace(/@(emotional|intelligent): /g, '')
       // ** bold ** 처리
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       // * italic * 처리  
@@ -162,7 +177,7 @@
       
       const emotionalMessage = {
         id: Date.now() + 1,
-        content: formatAIMessage(emotionalData.message),
+        content: emotionalData.message, // 원본 메시지 저장 (태그 포함)
         sender: 'assistant',
         timestamp: new Date().toISOString(),
         agentType: 'emotional'
@@ -199,7 +214,7 @@
           
           const intelligentMessage = {
             id: Date.now() + 2,
-            content: formatAIMessage(intelligentData.message),
+            content: intelligentData.message, // 원본 메시지 저장 (태그 포함)
             sender: 'assistant',
             timestamp: new Date().toISOString(),
             agentType: 'intelligent'
@@ -304,7 +319,7 @@
           </div>
         {/if}
         <div class="message-content">
-          {@html message.content}
+          {@html formatAIMessageForDisplay(message.content)}
         </div>
         <div class="message-time">
           {new Date(message.timestamp).toLocaleTimeString()}

@@ -174,19 +174,39 @@ async function generateEmotionalAgentResponse(messages: any[], sessionData: any,
   try {
     const systemPrompt = createEmotionalAgentPrompt(sessionData);
     
+    // 대화 기록을 임시로 복사하여 태그 제거 (원본은 보존)
+    const tempMessages = messages
+      .filter((msg: any) => msg.content !== 'loading' && msg.sender)
+      .map((msg: any) => {
+        if (msg.sender === 'user') {
+          return {
+            role: 'user',
+            content: `user_1: ${msg.content}`
+          };
+        } else if (msg.content && msg.content.startsWith('@intelligent:')) {
+          // 지적 에이전트의 발화를 user_2로 표시 (태그 제거)
+          const contentWithoutTag = msg.content.replace('@intelligent: ', '');
+          return {
+            role: 'user',
+            content: `user_2: ${contentWithoutTag}`
+          };
+        } else {
+          // 감정적 에이전트나 기타 메시지는 assistant로 유지 (태그 제거)
+          const contentWithoutTag = msg.content.replace(/@(emotional|intelligent): /, '');
+          return {
+            role: 'assistant',
+            content: contentWithoutTag
+          };
+        }
+      });
+    
     // 대화 컨텍스트 구성
     const conversationMessages = [
       {
         role: 'system',
         content: systemPrompt
       },
-      // 사용자와 AI 메시지들을 올바른 형식으로 변환
-      ...messages
-        .filter((msg: any) => msg.content !== 'loading' && msg.sender)
-        .map((msg: any) => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        }))
+      ...tempMessages
     ];
 
     const requestData = {
@@ -197,6 +217,16 @@ async function generateEmotionalAgentResponse(messages: any[], sessionData: any,
     };
 
     console.log('Making emotional agent API call');
+    console.log('=== ORIGINAL MESSAGES (before processing) ===');
+    messages?.forEach((msg: any, index: number) => {
+      console.log(`Original Message ${index}:`, {
+        sender: msg.sender,
+        content: msg.content?.substring(0, 100) + (msg.content?.length > 100 ? '...' : ''),
+        messageType: msg.messageType
+      });
+    });
+    console.log('=== PROCESSED CONVERSATION MESSAGES ===');
+    console.log('Emotional agent conversation messages:', JSON.stringify(conversationMessages, null, 2));
     
     const apiUrl = `${endpoint}openai/deployments/${modelName}/chat/completions?api-version=${apiVersion}`;
     
@@ -218,7 +248,10 @@ async function generateEmotionalAgentResponse(messages: any[], sessionData: any,
     }
 
     const data = await response.json();
-    const aiMessage = data.choices[0]?.message?.content?.trim() || "I can really feel what you're going through. That sounds challenging and I want you to know that your feelings are completely valid.";
+    const rawMessage = data.choices[0]?.message?.content?.trim() || "I can really feel what you're going through. That sounds challenging and I want you to know that your feelings are completely valid.";
+    
+    // 감정적 에이전트 응답에 접두사 추가
+    const aiMessage = `@emotional: ${rawMessage}`;
     
     console.log('Generated emotional agent response length:', aiMessage.length);
     
@@ -238,7 +271,7 @@ async function generateEmotionalAgentResponse(messages: any[], sessionData: any,
     console.error('Emotional agent response error:', error);
     
     return new Response(JSON.stringify({ 
-      message: "I can sense the depth of what you're sharing. Your perspective really matters to me, and I want to understand more about how this affects you personally.",
+      message: "@emotional: I can sense the depth of what you're sharing. Your perspective really matters to me, and I want to understand more about how this affects you personally.",
       sessionData: sessionData,
       messageType: 'emotional-response',
       conversationState: 'emotional_response'
@@ -256,19 +289,39 @@ async function generateIntelligentAgentResponse(messages: any[], sessionData: an
   try {
     const systemPrompt = createIntelligentAgentPrompt(sessionData);
     
+    // 대화 기록을 임시로 복사하여 태그 제거 (원본은 보존)
+    const tempMessages = messages
+      .filter((msg: any) => msg.content !== 'loading' && msg.sender)
+      .map((msg: any) => {
+        if (msg.sender === 'user') {
+          return {
+            role: 'user',
+            content: `user_1: ${msg.content}`
+          };
+        } else if (msg.content && msg.content.startsWith('@emotional:')) {
+          // 감정적 에이전트의 발화를 user_2로 표시 (태그 제거)
+          const contentWithoutTag = msg.content.replace('@emotional: ', '');
+          return {
+            role: 'user',
+            content: `user_2: ${contentWithoutTag}`
+          };
+        } else {
+          // 지적 에이전트나 기타 메시지는 assistant로 유지 (태그 제거)
+          const contentWithoutTag = msg.content.replace(/@(emotional|intelligent): /, '');
+          return {
+            role: 'assistant',
+            content: contentWithoutTag
+          };
+        }
+      });
+    
     // 대화 컨텍스트 구성
     const conversationMessages = [
       {
         role: 'system',
         content: systemPrompt
       },
-      // 사용자와 AI 메시지들을 올바른 형식으로 변환
-      ...messages
-        .filter((msg: any) => msg.content !== 'loading' && msg.sender)
-        .map((msg: any) => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        }))
+      ...tempMessages
     ];
 
     const requestData = {
@@ -279,6 +332,16 @@ async function generateIntelligentAgentResponse(messages: any[], sessionData: an
     };
 
     console.log('Making intelligent agent API call');
+    console.log('=== ORIGINAL MESSAGES (before processing) ===');
+    messages?.forEach((msg: any, index: number) => {
+      console.log(`Original Message ${index}:`, {
+        sender: msg.sender,
+        content: msg.content?.substring(0, 100) + (msg.content?.length > 100 ? '...' : ''),
+        messageType: msg.messageType
+      });
+    });
+    console.log('=== PROCESSED CONVERSATION MESSAGES ===');
+    console.log('Intelligent agent conversation messages:', JSON.stringify(conversationMessages, null, 2));
     
     const apiUrl = `${endpoint}openai/deployments/${modelName}/chat/completions?api-version=${apiVersion}`;
     
@@ -300,7 +363,10 @@ async function generateIntelligentAgentResponse(messages: any[], sessionData: an
     }
 
     const data = await response.json();
-    const aiMessage = data.choices[0]?.message?.content?.trim() || "That's a very thoughtful perspective. Let me analyze this from a logical standpoint and share some insights that might be helpful.";
+    const rawMessage = data.choices[0]?.message?.content?.trim() || "That's a very thoughtful perspective. Let me analyze this from a logical standpoint and share some insights that might be helpful.";
+    
+    // 지적 에이전트 응답에 접두사 추가
+    const aiMessage = `@intelligent: ${rawMessage}`;
     
     console.log('Generated intelligent agent response length:', aiMessage.length);
     
@@ -320,7 +386,7 @@ async function generateIntelligentAgentResponse(messages: any[], sessionData: an
     console.error('Intelligent agent response error:', error);
     
     return new Response(JSON.stringify({ 
-      message: "That's an interesting point you've raised. From an analytical perspective, there are several factors to consider that might provide additional insight into this situation.",
+      message: "@intelligent: That's an interesting point you've raised. From an analytical perspective, there are several factors to consider that might provide additional insight into this situation.",
       sessionData: sessionData,
       messageType: 'intelligent-response',
       conversationState: 'user_message'
