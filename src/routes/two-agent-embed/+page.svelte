@@ -282,33 +282,6 @@
     }
   }
 
-  // 에이전트 타입에 따른 스타일 클래스 반환
-  function getAgentClass(agentType) {
-    switch(agentType) {
-      case 'emotional':
-        return 'emotional-agent';
-      case 'intelligent':
-        return 'intelligent-agent';
-      case 'initial':
-        return 'initial-message';
-      default:
-        return '';
-    }
-  }
-
-  // 에이전트 타입에 따른 라벨 반환
-  function getAgentLabel(agentType) {
-    switch(agentType) {
-      case 'emotional':
-        return '💝 Emotional Agent';
-      case 'intelligent':
-        return '🧠 Intelligent Agent';
-      case 'initial':
-        return '🤖 AI Assistant';
-      default:
-        return '';
-    }
-  }
 </script>
 
 <svelte:head>
@@ -317,19 +290,13 @@
 
 <div class="chat-container">
   <div class="chat-header">
-    <h3>Two-Agent Research Discussion</h3>
-    <p class="subtitle">Experience both emotional understanding and analytical insights</p>
+    <h3>Research Discussion</h3>
   </div>
   
   <div class="chat-messages" bind:this={chatContainer}>
     {#each messages as message (message.id)}
       {#if !message.hidden}
-        <div class="message {message.sender} {getAgentClass(message.agentType)}">
-          {#if message.agentType !== 'user' && message.agentType !== 'loading'}
-            <div class="agent-label">
-              {getAgentLabel(message.agentType)}
-            </div>
-          {/if}
+        <div class="message {message.sender} {message.agentType === 'emotional' ? 'emotional-agent' : message.agentType === 'intelligent' ? 'intelligent-agent' : ''}">
           <div class="message-content">
             {@html formatAIMessageForDisplay(message.content)}
           </div>
@@ -422,24 +389,16 @@
   
   .chat-header {
     padding: 1rem 2rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: #f8f9fa;
     border-bottom: 1px solid #e9ecef;
     width: 100%;
     box-sizing: border-box;
-    min-height: 80px;
+    min-height: 60px; /* 고정 높이 */
   }
   
   .chat-header h3 {
-    margin: 0 0 0.25rem 0;
-    color: white;
-    font-size: 1.25rem;
-  }
-  
-  .subtitle {
     margin: 0;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.9rem;
+    color: #495057;
   }
   
   .chat-messages {
@@ -480,47 +439,18 @@
     max-width: 100%;
   }
   
-  /* 에이전트별 스타일링 */
+  /* Emotional agent - 살짝 핑크색 배경 */
   .message.emotional-agent .message-content {
-    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-    color: #333;
-    border-radius: 1rem;
-    padding: 1rem;
-    border-left: 4px solid #ff6b6b;
+    background: #fff5f5;
+    border-left: 3px solid #ff6b9d;
+    padding-left: 1rem;
   }
   
+  /* Intelligent agent - 살짝 파란색 배경 */
   .message.intelligent-agent .message-content {
-    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-    color: #333;
-    border-radius: 1rem;
-    padding: 1rem;
-    border-left: 4px solid #4ecdc4;
-  }
-  
-  .message.initial-message .message-content {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 1rem;
-    padding: 1rem;
-  }
-  
-  .agent-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    opacity: 0.8;
-  }
-  
-  .message.emotional-agent .agent-label {
-    color: #d63384;
-  }
-  
-  .message.intelligent-agent .agent-label {
-    color: #0d6efd;
-  }
-  
-  .message.initial-message .agent-label {
-    color: rgba(255, 255, 255, 0.9);
+    background: #f0f8ff;
+    border-left: 3px solid #4a90e2;
+    padding-left: 1rem;
   }
   
   /* AI 메시지 내 formatting */
