@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-Agent Embed Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .embed-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .code-example {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .url-display {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            word-break: break-all;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Two-Agent Embed Example</h1>
+            <p>This demonstrates how to embed the two-agent chat interface in your website</p>
+        </div>
+
+        <h2>1. Basic Usage</h2>
+        <div class="code-example">
+// URL 파라미터 구성
+const params = new URLSearchParams({
+    topStatement: "여성은 가정에서 아이를 돌봐야 한다고 생각합니다",
+    aiSummary: "전통적인 성별 역할에 대한 견해",
+    importanceLevel: "high",
+    userReasoning: "가족의 안정성을 위해서는 전통적인 역할 분담이 필요하다고 생각합니다"
+});
+
+        // 임베드 URL 생성 (개발 환경용)
+        const embedUrl = 'http://localhost:5173/two-agent-embed?' + params.toString();
+
+// iframe으로 임베드
+const iframe = document.createElement('iframe');
+iframe.src = embedUrl;
+iframe.width = '100%';
+iframe.height = '600px';
+iframe.frameBorder = '0';
+document.body.appendChild(iframe);
+        </div>
+
+        <h2>2. Interactive Demo</h2>
+        <p>Try different parameters:</p>
+        
+        <div style="margin: 20px 0;">
+            <label>Top Statement:</label><br>
+            <input type="text" id="topStatement" value="여성은 가정에서 아이를 돌봐야 한다고 생각합니다" style="width: 100%; padding: 8px; margin: 5px 0;">
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label>AI Summary:</label><br>
+            <input type="text" id="aiSummary" value="전통적인 성별 역할에 대한 견해" style="width: 100%; padding: 8px; margin: 5px 0;">
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label>Importance Level:</label><br>
+            <select id="importanceLevel" style="padding: 8px; margin: 5px 0;">
+                <option value="low">Low (1-3)</option>
+                <option value="medium">Medium (4-6)</option>
+                <option value="high" selected>High (7-8)</option>
+            </select>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label>User Reasoning:</label><br>
+            <textarea id="userReasoning" rows="3" style="width: 100%; padding: 8px; margin: 5px 0;">가족의 안정성을 위해서는 전통적인 역할 분담이 필요하다고 생각합니다</textarea>
+        </div>
+        
+        <button class="button" onclick="generateEmbedUrl()">Generate Embed URL</button>
+        <button class="button" onclick="loadEmbed()">Load Chat</button>
+        
+        <div id="urlDisplay" class="url-display" style="display: none;"></div>
+        
+        <div id="embedContainer" class="embed-container" style="margin-top: 20px; display: none;">
+            <iframe id="chatIframe" width="100%" height="600px" frameBorder="0"></iframe>
+        </div>
+
+        <h2>3. HTML Example</h2>
+        <div class="code-example">
+&lt;!-- HTML에서 직접 사용 --&gt;
+&lt;iframe 
+  src="http://localhost:5173/two-agent-embed?topStatement=여성은%20가정에서%20아이를%20돌봐야%20한다고%20생각합니다&aiSummary=전통적인%20성별%20역할에%20대한%20견해&importanceLevel=high&userReasoning=가족의%20안정성을%20위해서는%20전통적인%20역할%20분담이%20필요하다고%20생각합니다"
+  width="100%" 
+  height="600px" 
+  frameborder="0"&gt;
+&lt;/iframe&gt;
+        </div>
+
+        <h2>4. Conversation Flow</h2>
+        <div class="code-example">
+1. Initial Message (AI Assistant)
+   ↓
+2. User Message
+   ↓
+3. Emotional Agent Response (💝)
+   ↓
+4. Intelligent Agent Response (🧠)
+   ↓
+5. User Message
+   ↓
+6. Repeat steps 3-5...
+        </div>
+
+        <h2>5. Features</h2>
+        <ul>
+            <li><strong>Dual Agent System:</strong> Each user message gets responses from both emotional and intelligent agents</li>
+            <li><strong>Visual Distinction:</strong> Different styling and icons for each agent type</li>
+            <li><strong>Personalized Initial Message:</strong> Based on URL parameters</li>
+            <li><strong>Responsive Design:</strong> Works on desktop and mobile</li>
+            <li><strong>Clean Interface:</strong> No branding or external elements</li>
+        </ul>
+    </div>
+
+    <script>
+        function generateEmbedUrl() {
+            const topStatement = document.getElementById('topStatement').value;
+            const aiSummary = document.getElementById('aiSummary').value;
+            const importanceLevel = document.getElementById('importanceLevel').value;
+            const userReasoning = document.getElementById('userReasoning').value;
+            
+            const params = new URLSearchParams({
+                topStatement: topStatement,
+                aiSummary: aiSummary,
+                importanceLevel: importanceLevel,
+                userReasoning: userReasoning
+            });
+            
+            const embedUrl = 'http://localhost:5173/two-agent-embed?' + params.toString();
+            
+            document.getElementById('urlDisplay').textContent = embedUrl;
+            document.getElementById('urlDisplay').style.display = 'block';
+        }
+        
+        function loadEmbed() {
+            const topStatement = document.getElementById('topStatement').value;
+            const aiSummary = document.getElementById('aiSummary').value;
+            const importanceLevel = document.getElementById('importanceLevel').value;
+            const userReasoning = document.getElementById('userReasoning').value;
+            
+            const params = new URLSearchParams({
+                topStatement: topStatement,
+                aiSummary: aiSummary,
+                importanceLevel: importanceLevel,
+                userReasoning: userReasoning
+            });
+            
+            const embedUrl = 'http://localhost:5173/two-agent-embed?' + params.toString();
+            
+            document.getElementById('chatIframe').src = embedUrl;
+            document.getElementById('embedContainer').style.display = 'block';
+            
+            // Scroll to embed
+            document.getElementById('embedContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Generate initial URL on page load
+        window.onload = function() {
+            generateEmbedUrl();
+        };
+    </script>
+</body>
+</html>
