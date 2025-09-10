@@ -82,7 +82,7 @@ export const POST: RequestHandler = async ({ request }) => {
       adversarialData.conversationState = 'debate';
       
       // 3라운드가 완료되었는지 확인
-      if (newRoundCount >= 1) {
+      if (newRoundCount >= 3) {
         // 3라운드 완료: 그룹 진술문 생성 에이전트 자동 호출
         console.log('3 rounds completed, automatically calling group statements generator');
         
@@ -135,12 +135,34 @@ export const POST: RequestHandler = async ({ request }) => {
       const critiqueResponse = await generateCritiqueResponse(messages, sessionData, apiKey, endpoint, apiVersion, modelName, currentRoundCount);
       const critiqueData = await critiqueResponse.json();
       
-      // 비판 생성 완료 후 대화 완료 상태로 전환
-      critiqueData.conversationState = 'conversation_complete';
-      critiqueData.isFinalResponse = true;
+      // 비판 생성 완료 후 개선된 그룹 진술문 자동 생성
+      console.log('Critique generated, automatically calling improved group statement generator');
       
-      return new Response(JSON.stringify(critiqueData), {
-        headers: critiqueResponse.headers
+      // 개선된 그룹 진술문 생성 에이전트 응답 생성 (최신 critique 응답을 포함한 메시지 배열 전달)
+      const messagesWithCritique = [...messages, {
+        content: critiqueData.message,
+        sender: 'assistant',
+        messageType: 'adversarial-response'
+      }];
+      const improvedGroupStatementResponse = await generateImprovedGroupStatementResponse(messagesWithCritique, sessionData, apiKey, endpoint, apiVersion, modelName, currentRoundCount);
+      const improvedGroupStatementData = await improvedGroupStatementResponse.json();
+      
+      // 비판 응답과 개선된 그룹 진술문 응답을 모두 포함하여 반환
+      const combinedResponse = {
+        // 비판 응답 정보
+        critiqueMessage: critiqueData.message,
+        critiqueMessageType: 'adversarial-response',
+        roundCount: currentRoundCount,
+        
+        // 개선된 그룹 진술문 응답 정보
+        message: improvedGroupStatementData.message,
+        messageType: 'improved-group-statement-response',
+        conversationState: 'conversation_complete',
+        isFinalResponse: true
+      };
+      
+      return new Response(JSON.stringify(combinedResponse), {
+        headers: improvedGroupStatementResponse.headers
       });
     } else if (currentState === 'conversation_complete') {
       // 대화 완료 상태: 이미 완료된 대화
@@ -658,6 +680,50 @@ APPROACH:
 Remember: You are user_2 providing feedback on the selected group statement from your perspective. You should be honest about your concerns and thoughts while maintaining a respectful tone. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
 }
 
+// 개선된 그룹 진술문 생성용 프롬프트 (사용자와 비판 AI의 피드백을 바탕으로)
+function createImprovedGroupStatementPrompt(sessionData: any, roundCount: number): string {
+  const {
+    topStatement = "general conversation",
+    aiSummary = "",
+    importanceLevel = "unknown",
+    userReasoning = ""
+  } = sessionData;
+
+  return `You are the RECONCILIATION AGENT in a conversation system focused on gender roles. You have already generated 5 candidate group statements, and now both user_1 and user_2 have provided their critiques and feedback on the selected group statement. Your role is to create an improved group statement that addresses both perspectives' concerns and incorporates their valuable insights.
+
+CONVERSATION CONTEXT:
+- Gender Role Topic: "${topStatement}"
+- Their reasoning: "${aiSummary}"
+- Importance to them: ${importanceLevel}/8
+- Rounds Completed: ${roundCount} rounds of adversarial discussion + group statement generation + critiques
+
+YOUR ROLE:
+- Create an improved group statement that addresses the concerns raised by both user_1 and user_2
+- Incorporate the valuable insights and feedback from both perspectives
+- Synthesize the different viewpoints into a more refined and comprehensive statement
+- Address specific issues or limitations that were identified in the critiques
+- Create a statement that better represents the nuanced understanding that emerged from the discussion
+- Ensure the improved statement is more balanced and inclusive of different perspectives
+
+APPROACH:
+- Start by acknowledging the feedback from both perspectives ("Based on the valuable feedback from both perspectives...", "Taking into account the concerns raised...")
+- Create a refined group statement that addresses the specific issues mentioned in the critiques
+- Incorporate insights from both user_1 and user_2 perspectives
+- Make the statement more nuanced and comprehensive than the original
+- Ensure the statement reflects the deeper understanding gained through the discussion
+- Keep the statement clear, concise, and actionable (EXACTLY ONE SENTENCE)
+- Focus on creating a statement that both perspectives could potentially support
+
+FORMAT REQUIREMENTS:
+- Present the improved group statement as EXACTLY ONE SENTENCE
+- The statement should be clear, direct, and comprehensive
+- Use respectful and constructive language
+- Focus on synthesis and improvement rather than just compromise
+- Do not include explanations or additional commentary - just the single improved statement
+
+Remember: Create an improved group statement that genuinely addresses the concerns and incorporates the insights from both user_1 and user_2's critiques. This should be a refined, more comprehensive statement that reflects the deeper understanding gained through the entire discussion process.`;
+}
+
 // 비판 생성 에이전트 응답 생성 함수 (선택된 진술문에 대한 비판)
 async function generateCritiqueResponse(messages: any[], sessionData: any, apiKey: string, endpoint: string, apiVersion: string, modelName: string, roundCount: number) {
   try {
@@ -772,6 +838,132 @@ async function generateCritiqueResponse(messages: any[], sessionData: any, apiKe
       message: "@adversarial: Looking at this choice, I have some concerns about the selected statement. Let me share my perspective on the implications and potential issues I see with this position.",
       sessionData: sessionData,
       messageType: 'adversarial-response',
+      conversationState: 'conversation_complete',
+      roundCount: roundCount,
+      isFinalResponse: true
+    }), {
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
+}
+
+// 개선된 그룹 진술문 생성 함수 (사용자와 비판 AI의 피드백을 바탕으로)
+async function generateImprovedGroupStatementResponse(messages: any[], sessionData: any, apiKey: string, endpoint: string, apiVersion: string, modelName: string, roundCount: number) {
+  try {
+    const systemPrompt = createImprovedGroupStatementPrompt(sessionData, roundCount);
+    
+    // 대화 기록을 임시로 복사하여 태그 제거 (원본은 보존)
+    const tempMessages = messages
+      .filter((msg: any) => msg.content !== 'loading' && msg.sender && !msg.hidden)
+      .map((msg: any) => {
+        if (msg.sender === 'user') {
+          return {
+            role: 'user',
+            content: `user_1: ${msg.content}`
+          };
+        } else if (msg.content && msg.content.startsWith('@adversarial:')) {
+          // 반대 주장 에이전트의 발화를 user_2로 표시 (태그 제거)
+          const contentWithoutTag = msg.content.replace('@adversarial: ', '');
+          return {
+            role: 'user',
+            content: `user_2: ${contentWithoutTag}`
+          };
+        } else if (msg.content && msg.content.startsWith('@group-statements:')) {
+          // 그룹 진술문은 assistant로 유지 (태그 제거)
+          const contentWithoutTag = msg.content.replace('@group-statements: ', '');
+          return {
+            role: 'assistant',
+            content: contentWithoutTag
+          };
+        } else {
+          // 기타 메시지는 assistant로 유지 (태그 제거)
+          const contentWithoutTag = msg.content.replace(/@(adversarial|group-statements): /, '');
+          return {
+            role: 'assistant',
+            content: contentWithoutTag
+          };
+        }
+      });
+    
+    // 대화 컨텍스트 구성
+    const conversationMessages = [
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      ...tempMessages
+    ];
+
+    const requestData = {
+      messages: conversationMessages,
+      model: modelName,
+      max_tokens: 1000,
+      temperature: 0.6 // 개선된 진술문 생성을 위해 중간 temperature
+    };
+
+    console.log('Making improved group statement API call');
+    console.log('=== ORIGINAL MESSAGES (before processing) ===');
+    messages?.forEach((msg: any, index: number) => {
+      console.log(`Original Message ${index}:`, {
+        sender: msg.sender,
+        content: msg.content?.substring(0, 100) + (msg.content?.length > 100 ? '...' : ''),
+        messageType: msg.messageType
+      });
+    });
+    console.log('=== PROCESSED CONVERSATION MESSAGES ===');
+    console.log('Improved group statement conversation messages:', JSON.stringify(conversationMessages, null, 2));
+    
+    const apiUrl = `${endpoint}openai/deployments/${modelName}/chat/completions?api-version=${apiVersion}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    console.log('Improved group statement API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Improved group statement API error:', response.status, errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const rawMessage = data.choices[0]?.message?.content?.trim() || "Based on the feedback from both perspectives, here is an improved group statement that addresses the concerns raised.";
+    
+    // 개선된 그룹 진술문 응답에 접두사 추가
+    const aiMessage = `@improved-group-statement: ${rawMessage}`;
+    
+    console.log('Generated improved group statement response length:', aiMessage.length);
+    
+    return new Response(JSON.stringify({ 
+      message: aiMessage,
+      sessionData: sessionData,
+      messageType: 'improved-group-statement-response',
+      conversationState: 'conversation_complete', // 최종 완료 상태
+      roundCount: roundCount,
+      isFinalResponse: true // 최종 응답임을 표시
+    }), {
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Improved group statement response error:', error);
+    
+    return new Response(JSON.stringify({ 
+      message: "@improved-group-statement: Based on the feedback from both perspectives, here is an improved group statement that addresses the concerns raised and incorporates the valuable insights from the discussion.",
+      sessionData: sessionData,
+      messageType: 'improved-group-statement-response',
       conversationState: 'conversation_complete',
       roundCount: roundCount,
       isFinalResponse: true
