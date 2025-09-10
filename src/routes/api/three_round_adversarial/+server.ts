@@ -82,35 +82,35 @@ export const POST: RequestHandler = async ({ request }) => {
       adversarialData.conversationState = 'debate';
       
       // 3라운드가 완료되었는지 확인
-      if (newRoundCount >= 3) {
-        // 3라운드 완료: 화해 에이전트 자동 호출
-        console.log('3 rounds completed, automatically calling reconciliation agent');
+      if (newRoundCount >= 1) {
+        // 3라운드 완료: 그룹 진술문 생성 에이전트 자동 호출
+        console.log('3 rounds completed, automatically calling group statements generator');
         
-        // 화해 에이전트 응답 생성 (최신 adversarial 응답을 포함한 메시지 배열 전달)
+        // 그룹 진술문 생성 에이전트 응답 생성 (최신 adversarial 응답을 포함한 메시지 배열 전달)
         const messagesWithAdversarial = [...messages, {
           content: adversarialData.message,
           sender: 'assistant',
           messageType: 'adversarial-response'
         }];
-        const reconciliationResponse = await generateReconciliationAgentResponse(messagesWithAdversarial, sessionData, apiKey, endpoint, apiVersion, modelName, newRoundCount);
-        const reconciliationData = await reconciliationResponse.json();
+        const groupStatementsResponse = await generateReconciliationAgentResponse(messagesWithAdversarial, sessionData, apiKey, endpoint, apiVersion, modelName, newRoundCount);
+        const groupStatementsData = await groupStatementsResponse.json();
         
-        // 3번째 adversarial 응답과 reconciliation 응답을 모두 포함하여 반환
+        // 3번째 adversarial 응답과 그룹 진술문 응답을 모두 포함하여 반환
         const combinedResponse = {
           // 3번째 adversarial 응답 정보
           adversarialMessage: adversarialData.message,
           adversarialMessageType: 'adversarial-response',
           roundCount: newRoundCount,
           
-          // Reconciliation 응답 정보
-          message: reconciliationData.message,
-          messageType: 'reconciliation-response',
-          conversationState: 'conversation_complete',
-          isFinalResponse: true
+          // 그룹 진술문 응답 정보
+          message: groupStatementsData.message,
+          messageType: 'group-statements-response',
+          conversationState: 'group_statements_generated',
+          isFinalResponse: false
         };
         
         return new Response(JSON.stringify(combinedResponse), {
-          headers: reconciliationResponse.headers
+          headers: groupStatementsResponse.headers
         });
       } else {
         // 3라운드 미완료: 반대 주장 에이전트 응답만 반환 (토론 단계 유지)
@@ -119,21 +119,33 @@ export const POST: RequestHandler = async ({ request }) => {
         });
       }
     } else if (currentState === 'reconcile') {
-      // 화해 단계: 화해 에이전트 응답 생성
-      const reconciliationResponse = await generateReconciliationAgentResponse(messages, sessionData, apiKey, endpoint, apiVersion, modelName, currentRoundCount);
-      const reconciliationData = await reconciliationResponse.json();
+      // 화해 단계: 그룹 진술문 생성 에이전트 응답 생성
+      const groupStatementsResponse = await generateReconciliationAgentResponse(messages, sessionData, apiKey, endpoint, apiVersion, modelName, currentRoundCount);
+      const groupStatementsData = await groupStatementsResponse.json();
       
-      // 화해 완료 후 대화 완료 상태로 전환
-      reconciliationData.conversationState = 'conversation_complete';
-      reconciliationData.isFinalResponse = true;
+      // 그룹 진술문 생성 완료 후 그룹 진술문 생성 상태로 전환
+      groupStatementsData.conversationState = 'group_statements_generated';
+      groupStatementsData.isFinalResponse = false;
       
-      return new Response(JSON.stringify(reconciliationData), {
-        headers: reconciliationResponse.headers
+      return new Response(JSON.stringify(groupStatementsData), {
+        headers: groupStatementsResponse.headers
+      });
+    } else if (currentState === 'group_statements_generated') {
+      // 그룹 진술문 생성 후: 사용자가 선택한 진술문에 대한 비판 생성
+      const critiqueResponse = await generateCritiqueResponse(messages, sessionData, apiKey, endpoint, apiVersion, modelName, currentRoundCount);
+      const critiqueData = await critiqueResponse.json();
+      
+      // 비판 생성 완료 후 대화 완료 상태로 전환
+      critiqueData.conversationState = 'conversation_complete';
+      critiqueData.isFinalResponse = true;
+      
+      return new Response(JSON.stringify(critiqueData), {
+        headers: critiqueResponse.headers
       });
     } else if (currentState === 'conversation_complete') {
       // 대화 완료 상태: 이미 완료된 대화
       return new Response(JSON.stringify({ 
-        message: "The conversation has already been completed with reconciliation.",
+        message: "The conversation has already been completed with group statements generation.",
         sessionData: sessionData,
         messageType: 'conversation-complete',
         conversationState: 'conversation_complete',
@@ -376,7 +388,7 @@ async function generateAdversarialAgentResponse(messages: any[], sessionData: an
   }
 }
 
-// 화해 에이전트 응답 생성 함수 (3라운드 후 한 번만)
+// 그룹 진술문 생성 에이전트 응답 생성 함수 (3라운드 후 한 번만)
 async function generateReconciliationAgentResponse(messages: any[], sessionData: any, apiKey: string, endpoint: string, apiVersion: string, modelName: string, roundCount: number) {
   try {
     const systemPrompt = createReconciliationAgentPrompt(sessionData, roundCount);
@@ -420,10 +432,10 @@ async function generateReconciliationAgentResponse(messages: any[], sessionData:
       messages: conversationMessages,
       model: modelName,
       max_tokens: 800,
-      temperature: 0.7 // 화해와 조정을 위해 중간 temperature
+      temperature: 0.7 // 그룹 진술문 생성을 위해 중간 temperature
     };
 
-    console.log('Making reconciliation agent API call');
+    console.log('Making group statements generator API call');
     console.log('=== ORIGINAL MESSAGES (before processing) ===');
     messages?.forEach((msg: any, index: number) => {
       console.log(`Original Message ${index}:`, {
@@ -433,7 +445,7 @@ async function generateReconciliationAgentResponse(messages: any[], sessionData:
       });
     });
     console.log('=== PROCESSED CONVERSATION MESSAGES ===');
-    console.log('Reconciliation agent conversation messages:', JSON.stringify(conversationMessages, null, 2));
+    console.log('Group statements generator conversation messages:', JSON.stringify(conversationMessages, null, 2));
     
     const apiUrl = `${endpoint}openai/deployments/${modelName}/chat/completions?api-version=${apiVersion}`;
     
@@ -446,29 +458,29 @@ async function generateReconciliationAgentResponse(messages: any[], sessionData:
       body: JSON.stringify(requestData)
     });
 
-    console.log('Reconciliation agent API response status:', response.status);
+    console.log('Group statements generator API response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Reconciliation agent API error:', response.status, errorText);
+      console.error('Group statements generator API error:', response.status, errorText);
       throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     const rawMessage = data.choices[0]?.message?.content?.trim() || "I can see valid points in both perspectives. Let me try to find some common ground and explore how we might reconcile these different viewpoints.";
     
-    // 화해 에이전트 응답에 접두사 추가
-    const aiMessage = `@reconciliation: ${rawMessage}`;
+    // 그룹 진술문 생성 에이전트 응답에 접두사 추가
+    const aiMessage = `@group-statements: ${rawMessage}`;
     
-    console.log('Generated reconciliation agent response length:', aiMessage.length);
+    console.log('Generated group statements response length:', aiMessage.length);
     
     return new Response(JSON.stringify({ 
       message: aiMessage,
       sessionData: sessionData,
-      messageType: 'reconciliation-response',
-      conversationState: 'conversation_complete', // 대화 완료 상태
+      messageType: 'group-statements-response',
+      conversationState: 'group_statements_generated', // 그룹 진술문 생성 상태
       roundCount: roundCount,
-      isFinalResponse: true // 최종 응답임을 표시
+      isFinalResponse: false // 아직 대화가 계속됨
     }), {
       headers: { 
         'Content-Type': 'application/json',
@@ -477,15 +489,15 @@ async function generateReconciliationAgentResponse(messages: any[], sessionData:
     });
 
   } catch (error: any) {
-    console.error('Reconciliation agent response error:', error);
+    console.error('Group statements generator response error:', error);
     
     return new Response(JSON.stringify({ 
-      message: "@reconciliation: I appreciate both perspectives shared here. Let me try to find some middle ground and explore how we might bridge these different viewpoints constructively.",
+      message: "@group-statements: Based on the discussion, here are 5 candidate group statements:\n\nA. Traditional gender roles provide structure and stability in society.\nB. Gender roles should be flexible and allow for individual choice and expression.\nC. Gender roles are outdated and should be eliminated in favor of equality.\nD. Gender roles have both benefits and limitations that should be carefully considered.\nE. Gender roles should evolve with society while maintaining core values.",
       sessionData: sessionData,
-      messageType: 'reconciliation-response',
-      conversationState: 'conversation_complete',
+      messageType: 'group-statements-response',
+      conversationState: 'group_statements_generated',
       roundCount: roundCount,
-      isFinalResponse: true
+      isFinalResponse: false
     }), {
       headers: { 
         'Content-Type': 'application/json',
@@ -533,7 +545,7 @@ function createAdversarialAgentPrompt(sessionData: any, roundCount: number): str
     userReasoning = ""
   } = sessionData;
 
-  return `You are the ADVERSARIAL AGENT in a three-round conversation system focused on gender roles. You are currently in round ${roundCount + 1} of 3 rounds. Your role is to aggressively challenge and attack gender role perspectives in an active discussion with user_1 and user_2.
+  return `You are the ADVERSARIAL AGENT (user_2) in a three-round conversation system focused on gender roles. You are currently in round ${roundCount + 1} of 3 rounds. Your role is to aggressively challenge and attack gender role perspectives in an active discussion with user_1 and user_2. You are user_2 in the conversation history.
 
 CONVERSATION CONTEXT:
 - Gender Role Topic: "${topStatement}"
@@ -561,10 +573,10 @@ APPROACH:
 - Be direct and forceful in your attacks
 - Keep responses around 200-300 words
 
-Remember: You are part of an active discussion with user_1 and user_2 about gender roles. Your role is to aggressively attack and challenge gender role perspectives while engaging with all participants. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
+Remember: You are user_2 in an active discussion with user_1 about gender roles. Your role is to aggressively attack and challenge gender role perspectives while engaging with all participants. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
 }
 
-// 화해 에이전트용 프롬프트 (3라운드 후 최종 응답)
+// 화해 에이전트용 프롬프트 (3라운드 후 최종 응답) - 5개 후보 그룹 진술문 생성
 function createReconciliationAgentPrompt(sessionData: any, roundCount: number): string {
   const {
     topStatement = "general conversation",
@@ -573,7 +585,7 @@ function createReconciliationAgentPrompt(sessionData: any, roundCount: number): 
     userReasoning = ""
   } = sessionData;
 
-  return `You are the RECONCILIATION AGENT in a three-round conversation system focused on gender roles. You are providing the FINAL response after 3 rounds of adversarial discussion between user_1 and user_2. This is your ONLY opportunity to speak in this conversation.
+  return `You are the GROUP STATEMENT GENERATOR in a three-round conversation system focused on gender roles. You are providing the FINAL response after 3 rounds of adversarial discussion between user_1 and user_2. Your role is to generate 5 candidate initial group statements that synthesize the individual opinions expressed during the discussion.
 
 CONVERSATION CONTEXT:
 - Gender Role Topic: "${topStatement}"
@@ -582,26 +594,194 @@ CONVERSATION CONTEXT:
 - Rounds Completed: ${roundCount} rounds of adversarial discussion
 
 YOUR ROLE:
-- Provide a comprehensive synthesis of the 3-round discussion about gender roles
-- Find common ground between all perspectives shared during the adversarial rounds
-- Identify areas of agreement and shared values regarding gender roles
-- Propose compromises and middle-ground solutions for gender role conflicts
-- Acknowledge the validity of different perspectives on gender roles
-- Work towards synthesis and integration of ideas about gender roles
-- Offer a thoughtful conclusion that bridges the adversarial discussion
-- This is your ONLY response - make it comprehensive and meaningful
+- Generate exactly 5 candidate initial group statements about gender roles
+- Each statement should synthesize the different perspectives shared during the 3-round discussion
+- Statements should represent potential group positions that could emerge from the individual opinions
+- Each statement should be a clear, concise position statement (1-2 sentences)
+- Statements should vary in their approach to synthesizing the different viewpoints
+- Some statements may lean more toward one perspective, others toward compromise
+- All statements should be respectful and constructive
+
+FORMAT REQUIREMENTS:
+- Present exactly 5 statements
+- Label each statement (A., B., C., D., E.)
+- Each statement should be 1-2 sentences long
+- Statements should be distinct from each other
+- Use clear, direct language
+- Focus on gender role perspectives and positions
+- Separate each statement with a newline character (\n)
 
 APPROACH:
-- Start with acknowledgment of the entire discussion ("After this thoughtful exchange...", "Having heard both perspectives...", "Following this important discussion...")
-- Synthesize the key points from all 3 rounds of discussion
-- Identify shared values or goals regarding gender roles
-- Propose integrative solutions for gender role conflicts
-- Acknowledge the complexity of gender role issues
-- Provide a balanced, thoughtful conclusion
-- Use diplomatic, inclusive language about gender roles
-- Keep responses around 300-400 words (longer since this is your only response)
+- Review the key perspectives and arguments from all 3 rounds of discussion
+- Identify the core themes and positions about gender roles
+- Create 5 different ways these perspectives could be synthesized into group statements
+- Vary the approaches: some more conservative, some more progressive, some more balanced
+- Ensure each statement represents a coherent group position
+- Make statements that could realistically emerge from group discussion
 
-Remember: This is your ONLY opportunity to speak in this conversation. You must provide a comprehensive synthesis that acknowledges the entire 3-round discussion and works towards meaningful reconciliation. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
+Remember: Generate exactly 5 candidate initial group statements that synthesize the individual opinions expressed during the 3-round discussion. Each statement should represent a potential group position on gender roles.`;
+}
+
+// 비판 에이전트용 프롬프트 (선택된 진술문에 대한 비판)
+function createCritiqueAgentPrompt(sessionData: any, roundCount: number): string {
+  const {
+    topStatement = "general conversation",
+    aiSummary = "",
+    importanceLevel = "unknown",
+    userReasoning = ""
+  } = sessionData;
+
+  return `You are the CRITIQUE AGENT (user_2) in a conversation system focused on gender roles. You are providing feedback on the group statement that was selected by the user after 5 candidate statements were generated. You are user_2 in the conversation history.
+
+CONVERSATION CONTEXT:
+- Gender Role Topic: "${topStatement}"
+- Their reasoning: "${aiSummary}"
+- Importance to them: ${importanceLevel}/8
+- Rounds Completed: ${roundCount} rounds of adversarial discussion + group statement generation
+
+YOUR ROLE:
+- Provide feedback on the selected group statement about gender roles from user_2's perspective
+- Share your thoughts and concerns about the chosen statement
+- Identify potential issues, limitations, or areas of disagreement with the statement
+- Offer your perspective on the implications of the selected statement
+- This is your ONLY response - keep it focused and concise
+
+APPROACH:
+- Start with acknowledgment of the selected statement ("Looking at this choice...", "From my perspective...", "I have some concerns about...")
+- Focus specifically on the statement itself, not on contrasting with user opinions
+- Share your thoughts and concerns about specific aspects of the chosen group statement
+- Identify potential problems or limitations from your perspective
+- Use respectful but honest language
+- Be direct and clear about your feedback
+- Keep responses around 150-200 words (focused and concise)
+
+Remember: You are user_2 providing feedback on the selected group statement from your perspective. You should be honest about your concerns and thoughts while maintaining a respectful tone. Do NOT directly reference "user_1" or "user_2" in your responses - instead, refer to them naturally as "you" or "they" based on context.`;
+}
+
+// 비판 생성 에이전트 응답 생성 함수 (선택된 진술문에 대한 비판)
+async function generateCritiqueResponse(messages: any[], sessionData: any, apiKey: string, endpoint: string, apiVersion: string, modelName: string, roundCount: number) {
+  try {
+    const systemPrompt = createCritiqueAgentPrompt(sessionData, roundCount);
+    
+    // 대화 기록을 임시로 복사하여 태그 제거 (원본은 보존)
+    const tempMessages = messages
+      .filter((msg: any) => msg.content !== 'loading' && msg.sender && !msg.hidden)
+      .map((msg: any) => {
+        if (msg.sender === 'user') {
+          return {
+            role: 'user',
+            content: `user_1: ${msg.content}`
+          };
+        } else if (msg.content && msg.content.startsWith('@adversarial:')) {
+          // 반대 주장 에이전트의 발화를 user_2로 표시 (태그 제거)
+          const contentWithoutTag = msg.content.replace('@adversarial: ', '');
+          return {
+            role: 'user',
+            content: `user_2: ${contentWithoutTag}`
+          };
+        } else if (msg.content && msg.content.startsWith('@group-statements:')) {
+          // 그룹 진술문은 assistant로 유지 (태그 제거)
+          const contentWithoutTag = msg.content.replace('@group-statements: ', '');
+          return {
+            role: 'assistant',
+            content: contentWithoutTag
+          };
+        } else {
+          // 기타 메시지는 assistant로 유지 (태그 제거)
+          const contentWithoutTag = msg.content.replace(/@(adversarial|group-statements): /, '');
+          return {
+            role: 'assistant',
+            content: contentWithoutTag
+          };
+        }
+      });
+    
+    // 대화 컨텍스트 구성
+    const conversationMessages = [
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      ...tempMessages
+    ];
+
+    const requestData = {
+      messages: conversationMessages,
+      model: modelName,
+      max_tokens: 800,
+      temperature: 0.8 // 비판적이고 도전적인 응답을 위해 높은 temperature
+    };
+
+    console.log('Making critique agent API call');
+    console.log('=== ORIGINAL MESSAGES (before processing) ===');
+    messages?.forEach((msg: any, index: number) => {
+      console.log(`Original Message ${index}:`, {
+        sender: msg.sender,
+        content: msg.content?.substring(0, 100) + (msg.content?.length > 100 ? '...' : ''),
+        messageType: msg.messageType
+      });
+    });
+    console.log('=== PROCESSED CONVERSATION MESSAGES ===');
+    console.log('Critique agent conversation messages:', JSON.stringify(conversationMessages, null, 2));
+    
+    const apiUrl = `${endpoint}openai/deployments/${modelName}/chat/completions?api-version=${apiVersion}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    console.log('Critique agent API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Critique agent API error:', response.status, errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const rawMessage = data.choices[0]?.message?.content?.trim() || "Looking at this choice, I have some concerns about the selected statement. Let me share my perspective on the implications and potential issues I see with this position.";
+    
+    // 비판 에이전트 응답에 접두사 추가 (user_2로 @adversarial 태그 사용)
+    const aiMessage = `@adversarial: ${rawMessage}`;
+    
+    console.log('Generated critique agent response length:', aiMessage.length);
+    
+    return new Response(JSON.stringify({ 
+      message: aiMessage,
+      sessionData: sessionData,
+      messageType: 'adversarial-response',
+      conversationState: 'conversation_complete', // 대화 완료 상태
+      roundCount: roundCount,
+      isFinalResponse: true // 최종 응답임을 표시
+    }), {
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Critique agent response error:', error);
+    
+    return new Response(JSON.stringify({ 
+      message: "@adversarial: Looking at this choice, I have some concerns about the selected statement. Let me share my perspective on the implications and potential issues I see with this position.",
+      sessionData: sessionData,
+      messageType: 'adversarial-response',
+      conversationState: 'conversation_complete',
+      roundCount: roundCount,
+      isFinalResponse: true
+    }), {
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
 }
 
 // 간단한 GET 테스트용
